@@ -19,56 +19,95 @@
       var width = canvas.width = window.innerWidth;
       var ctx = canvas.getContext("2d");
       
-      var playerX = 1.5;
-      var playerY = 1.5;
+      var playerX = 2.5;
+      var playerY = 12.5;
       var playerZ = 0.5;
-      var playerDirectionX = 0;
-      var playerDirectionY = 0;
+      var playerDirectionX = -25;
+      var playerDirectionY = -5;
       var FOV = 115;
-      var FOVY = FOV / width * height;
-      var resolution = width/16;
+      var FOVY = FOV / width * height * 2;
+      var resolution = width/1;
       var speed = 1;
       var prevTimeFPS = prevTimeMove = new Date();
       const degToRad = 1/180*Math.PI;
+      
+      var colors = [
+        function(coords, distance) {
+          return "rgb(" + ((255+((Math.floor(coords[0])+Math.floor(coords[1]))%2*150+1))/(distance+0.5)-10) + ", 0, 0)"
+        },
+        function(coords, distance) {
+          return "rgb(0, " + (255/(distance+0.5)-10) + ", " + (255/(distance+0.5)-10) + ")"
+        },
+        function(coords, distance) {
+          return "rgb(" + (255/(distance+0.5)-10) + ", " + (167/(distance+0.5)-10) + ", 0)"
+        },
+        function(coords, distance) {
+          return "rgb(0, 0, " + (255/(distance+0.5)-10) + ")"
+        },
+        function(coords, distance) {
+          let val = (255/(coords[0]-Math.floor(coords[0])+coords[1]-Math.floor(coords[1])+coords[2]-Math.floor(coords[2])-1))/(distance+0.5)-10;
+          return "rgb(" + val + ", " + val + ", " + val + ")"
+        },
+        function(coords, distance, directionX, directionY) {
+          if (Math.abs(coords[0]-Math.round(coords[0])) > Math.abs(coords[1]-Math.round(coords[1]))) {
+            directionX *= -1;
+          } else {
+            directionX = 180 - directionX;
+          }
+          directionY = 180-directionY;
+          
+          val = 1;
+          let rayOutput = ray(directionX, directionY, coords[0]+Math.cos(directionX*degToRad)*0.125, coords[1]+Math.sin(directionX*degToRad)*0.125, coords[2]+Math.sin(directionY*degToRad)*0.125);
+          distance += rayOutput[0]+3;
+          let collision = rayOutput[1];
+          let color = colors[rayOutput[2]];
+          
+          if (rayOutput[2] == 5) {
+            return "black"
+          } else {
+            return color(collision, distance, directionX, directionY)
+          }
+        }
+      ];
       
       var pressedKeys = {};
       window.onkeyup = function(e) { pressedKeys[e.key] = false; }
       window.onkeydown = function(e) { pressedKeys[e.key] = true; }
       
       map = [
-        [1,1,1,1,1,1,1,1],
-        [1,0,1,1,0,1,0,1],
-        [1,0,0,1,0,1,0,1],
-        [1,1,0,0,0,1,0,1],
-        [1,0,0,1,0,1,0,1],
-        [1,0,1,0,0,1,0,1],
-        [1,0,0,0,0,0,0,1],
-        [1,1,1,1,1,1,1,1]
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+        [1,0,1,1,0,1,0,1,0,0,0,0,0,1],
+        [1,0,0,1,0,1,0,1,0,0,0,0,0,4],
+        [1,1,0,0,0,1,0,1,0,0,0,5,0,4],
+        [1,0,0,1,0,1,0,1,0,0,2,3,0,4],
+        [1,0,1,0,0,1,0,1,0,0,0,0,0,4],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,1,1,1,1,1,1,1,1,1,1,1,1,1]
       ]
       
       function findMapVal(x, y, r) {
-        if (y >= map.length || y < 0) {
-          return 1;
+        if (y >= map[Math.floor(x)].length || y < 0) {
+          return 1
         }
-        if (x >= map[Math.floor(y)].length || x < 0) {
-          return 1;
+        if (x >= map.length || x < 0) {
+          return 1
         }
         
         //return map[y][x];
         //return map[Math.floor(y)][Math.floor(x)];
         
         
-        if (map[Math.floor(x-r)][Math.floor(y-r)] == 1) {
-          return 1;
+        if (map[Math.floor(x-r)][Math.floor(y-r)] != 0) {
+          return map[Math.floor(x-r)][Math.floor(y-r)]
         }
-        if (map[Math.floor(x-r)][Math.floor(y+r)] == 1) {
-          return 1;
+        if (map[Math.floor(x-r)][Math.floor(y+r)] != 0) {
+          return map[Math.floor(x-r)][Math.floor(y+r)]
         }
-        if (map[Math.floor(x+r)][Math.floor(y-r)] == 1) {
-          return 1;
+        if (map[Math.floor(x+r)][Math.floor(y-r)] != 0) {
+          return map[Math.floor(x+r)][Math.floor(y-r)]
         }
-        if (map[Math.floor(x+r)][Math.floor(y+r)] == 1) {
-          return 1;
+        if (map[Math.floor(x+r)][Math.floor(y+r)] != 0) {
+          return map[Math.floor(x+r)][Math.floor(y+r)]
         }
         
         //try {
@@ -95,27 +134,24 @@
       
       const distance = (x1, y1, z1, x2, y2, z2) => Math.hypot(x2 - x1, y2 - y1, z2 - z1);
       
-      function ray(directionX, directionY) {
-        let x = playerX;
-        let y = playerY;
-        let z = playerZ;
+      function ray(directionX, directionY, startX, startY, startZ) {
+        let x = startX;
+        let y = startY;
+        let z = startZ;
         
-        while (distance(playerX, playerY, playerZ, x, y, z) < 5) {
+        while (distance(startX, startY, startZ, x, y, z) < 12) {
           let r = 0.25;
-          while (findMapVal(x, y, r) == 1 || z-r < 0 || z+r > 1) {
-            r *= 0.5;
+          while (findMapVal(x, y, r) != 0 || z-r < 0 || z+r > 1) {
             if (r < 0.001) {
-              return [distance(playerX, playerY, playerZ, x, y, z), [x, y, z]];
+              return [distance(startX, startY, startZ, x, y, z), [x, y, z], findMapVal(x, y, r)];
             }
+            r *= 0.5;
           }
           x += Math.cos(directionX*degToRad)*r;
           y += Math.sin(directionX*degToRad)*r;
           z += Math.sin(directionY*degToRad)*r;
-          if (z < 0 || z > 1) {
-            return [distance(playerX, playerY, playerZ, x, y, z), [x, y, z]];
-          }
         }
-        return [5, [x, y, z]];
+        return [12, [x, y, z], findMapVal(x, y, r)];
       }
       
       function render() {
@@ -126,26 +162,26 @@
 
 // Fill with gradient
 //ctx.fillStyle = grd;
-        ctx.fillStyle = "green";
+        ctx.fillStyle = "black";
         ctx.fillRect(0, 0, width, height)
         let distance = 8;
-        try {
         for (let directionX = playerDirectionX-(FOV/2); directionX <= playerDirectionX+(FOV/2); directionX += FOV/resolution) {
           for (let directionY = playerDirectionY-(FOVY/2); directionY <= playerDirectionY+(FOVY/2); directionY += FOVY/resolution) {
-            rayOutput = ray(directionX, directionY);
+            let rayOutput = ray(directionX, directionY, playerX, playerY, playerZ);
             distance = rayOutput[0];
-            collision = rayOutput[1];
+            let collision = rayOutput[1];
+            let color = colors[rayOutput[2]];
             //distance = distance*Math.cos((directionX-playerDirectionX)/360*Math.PI*2);
-            if (collision[2] > 0.998 || collision[2] < 0.002) {
-              ctx.fillStyle = "hsl(0, 100%, " + (100-distance*20+((Math.floor(collision[0])+Math.floor(collision[1]))%2*30+1)) + "%)";
-            } else {
-              ctx.fillStyle = "hsl(180, 100%, " + (100-distance*20) + "%)";
-            }
+            //if (collision[2] > 0.998 || collision[2] < 0.002) {
+            //  ctx.fillStyle = "hsl(0, 100%, " + ((120+((Math.floor(collision[0])+Math.floor(collision[1]))%2*50+1))/(distance+0.6)-10) + "%)";
+            //  ctx.fillStyle = "rgb(" + (((255+((Math.floor(collision[0])+Math.floor(collision[1]))%2*150+1))/(distance+0.5)-10)) + ", 0, 0)";
+            //} else {
+            //  ctx.fillStyle = "hsl(180, 100%, " + (120/(distance+0.6)-10) + "%)";
+            //  ctx.fillStyle = "rgb(" + (color[0]/(distance+0.5)-10) + ", " + (color[1]/(distance+0.5)-10) + ", " + (color[2]/(distance+0.5)-10) + ")";
+            //}
+            ctx.fillStyle = color(collision, distance, playerDirectionX, playerDirectionY);
             ctx.fillRect((directionX-playerDirectionX)*width/FOV+width/2, -(directionY-playerDirectionY)*width/FOVY+height/2, width/resolution, width/resolution+0.5);
           }
-        }
-        } catch(err) {
-          alert(err);
         }
       }
       
@@ -179,7 +215,7 @@
         ctx.strokeStyle = "white";
         ctx.beginPath();
         ctx.moveTo(20, 30);
-        ctx.lineTo(20+1000/(currentTime-prevTime)*5, 30);
+        ctx.lineTo(20+1000/(currentTime-prevTimeFPS)*5, 30);
         ctx.stroke();
         prevTimeFPS = currentTime;
         
@@ -210,69 +246,58 @@
         }
         if (pressedKeys["ArrowUp"] || pressedKeys["w"]) {
           playerX += Math.cos(playerDirectionX*degToRad)*dist;
-          if (findMapVal(playerX, playerY, 0.2) == 1) {
-            while (findMapVal(playerX, playerY, 0.2) == 1) {
-              playerX -= Math.cos(playerDirectionX*degToRad)*0.01;
-            }
+          while (findMapVal(playerX, playerY, 0.2) != 0) {
+            playerX -= Math.cos(playerDirectionX*degToRad)*0.01;
           }
           playerY += Math.sin(playerDirectionX*degToRad)*dist;
-          if (findMapVal(playerX, playerY, 0.2) == 1) {
-            while (findMapVal(playerX, playerY, 0.2) == 1) {
-              playerY -= Math.sin(playerDirectionX*degToRad)*0.01;
-            }
+          while (findMapVal(playerX, playerY, 0.2) != 0) {
+            playerY -= Math.sin(playerDirectionX*degToRad)*0.01;
           }
         }
         if (pressedKeys["ArrowDown"] || pressedKeys["s"]) {
           playerX -= Math.cos(playerDirectionX*degToRad)*dist;
-          if (findMapVal(playerX, playerY, 0.2) == 1) {
-            while (findMapVal(playerX, playerY, 0.2) == 1) {
-              playerX += Math.cos(playerDirectionX*degToRad)*0.01;
-            }
+          while (findMapVal(playerX, playerY, 0.2) != 0) {
+            playerX += Math.cos(playerDirectionX*degToRad)*0.01;
           }
           playerY -= Math.sin(playerDirectionX*degToRad)*dist;
-          if (findMapVal(playerX, playerY, 0.2) == 1) {
-            while (findMapVal(playerX, playerY, 0.2) == 1) {
-              playerY += Math.sin(playerDirectionX*degToRad)*0.01;
-            }
+          while (findMapVal(playerX, playerY, 0.2) != 0) {
+            playerY += Math.sin(playerDirectionX*degToRad)*0.01;
           }
         }
         if (pressedKeys["a"]) {
           playerX -= Math.cos(playerDirectionX*degToRad+Math.PI/2)*dist;
-          if (findMapVal(playerX, playerY, 0.2) == 1) {
-            while (findMapVal(playerX, playerY, 0.2) == 1) {
-              playerX += Math.cos(playerDirectionX*degToRad+Math.PI/2)*0.01;
-            }
+          while (findMapVal(playerX, playerY, 0.2) != 0) {
+            playerX += Math.cos(playerDirectionX*degToRad+Math.PI/2)*0.01;
           }
           playerY -= Math.sin(playerDirectionX*degToRad+Math.PI/2)*dist;
-          if (findMapVal(playerX, playerY, 0.2) == 1) {
-            while (findMapVal(playerX, playerY, 0.2) == 1) {
-              playerY += Math.sin(playerDirectionX*degToRad+Math.PI/2)*0.01;
-            }
+          while (findMapVal(playerX, playerY, 0.2) != 0) {
+            playerY += Math.sin(playerDirectionX*degToRad+Math.PI/2)*0.01;
           }
         }
         if (pressedKeys["d"]) {
           playerX += Math.cos(playerDirectionX*degToRad+Math.PI/2)*dist;
-          if (findMapVal(playerX, playerY, 0.2) == 1) {
-            while (findMapVal(playerX, playerY, 0.2) == 1) {
-              playerX -= Math.cos(playerDirectionX*degToRad+Math.PI/2)*0.01;
-            }
+          while (findMapVal(playerX, playerY, 0.2) != 0) {
+            playerX -= Math.cos(playerDirectionX*degToRad+Math.PI/2)*0.01;
           }
           playerY += Math.sin(playerDirectionX*degToRad+Math.PI/2)*dist;
-          if (findMapVal(playerX, playerY, 0.2) == 1) {
-            while (findMapVal(playerX, playerY, 0.2) == 1) {
-              playerY -= Math.sin(playerDirectionX*degToRad+Math.PI/2)*0.01;
-            }
+          while (findMapVal(playerX, playerY, 0.2) != 0) {
+            playerY -= Math.sin(playerDirectionX*degToRad+Math.PI/2)*0.01;
           }
         }
       }
       
       function main() {
+        try {
         render();
         drawFps();
+        move();
+        } catch(err) {
+          alert(err);
+        }
       }
       
-      const interval = setInterval(main, 30);
-      const moveInterval = setInterval(move, 10);
+      const interval = setInterval(main, 4);
+      //const moveInterval = setInterval(move, 10);
       
       document.addEventListener("mousemove", function(e) {
         playerDirectionX += e.movementX/4;
