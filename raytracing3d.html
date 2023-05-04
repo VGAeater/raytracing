@@ -19,35 +19,36 @@
       var width = canvas.width = window.innerWidth;
       var ctx = canvas.getContext("2d");
       var image = ctx.createImageData(width, height);
-      console.log(image.data);
-
-      var playerX = 3.5;
-      var playerY = 10.5;
+      
+      const degToRad = 1/180*Math.PI;
+      var playerX = 1.5;
+      var playerY = 11.5;
       var playerZ = 0.5;
-      var playerDirectionX = 90;
-      var playerDirectionY = -5;
-      var FOV = 115;
+      var playerDirectionX = 45*degToRad;
+      var playerDirectionY = -5*degToRad;
+      var FOV = 115*degToRad;
       var FOVY = FOV / width * height * 2;
-      var resolution = width/1;
+      var resolution = width/16;
       var speed = 1;
       var prevTimeFPS = prevTimeMove = new Date();
-      const degToRad = 1/180*Math.PI;
+      var renderDistance = 6;
+      var colorModifier = (255/renderDistance)/40;
       
       var colors = [
         function(coords, distance) {
-          return [((255+((Math.floor(coords[0])+Math.floor(coords[1]))%2*150+1))/(distance+0.5)-10),0,0]
+          return [((255+((Math.floor(coords[0])+Math.floor(coords[1]))%2*150+1))/(distance+0.5)/colorModifier-10),0,0]
         },
         function(coords, distance) {
-          return [0,(255/(distance+0.5)-10),(255/(distance+0.5)-10)]
+          return [0,(255/(distance+0.5)/colorModifier-10),(255/(distance+0.5)/colorModifier-10)]
         },
         function(coords, distance) {
-          return [(255/(distance+0.5)-10),(167/(distance+0.5)-10),0]
+          return [(255/(distance+0.5)/colorModifier-10),(167/(distance+0.5)/colorModifier-10),0]
         },
         function(coords, distance) {
-          return [0,0,(255/(distance+0.5)-10)]
+          return [0,0,(255/(distance+0.5)/colorModifier-10)]
         },
         function(coords, distance) {
-          let val = (255/(coords[0]-Math.floor(coords[0])+coords[1]-Math.floor(coords[1])+coords[2]-Math.floor(coords[2])-1))/(distance+0.5)-10;
+          let val = (255/(coords[0]-Math.floor(coords[0])+coords[1]-Math.floor(coords[1])+coords[2]-Math.floor(coords[2])-1))/(distance+0.5)/colorModifier-10;
           return [val,val,val]
         },
         function(coords, distance, directionX, directionY) {
@@ -57,25 +58,28 @@
           if (Math.abs(coords[0]-Math.round(coords[0])) > Math.abs(coords[1]-Math.round(coords[1]))) {
             directionX *= -1;
           } else {
-            directionX = 180 - directionX;
+            directionX = Math.PI-directionX;
           }
-          directionY = 180-directionY;
+          directionY = Math.PI-directionY;
           
-          val = 1;
-          let rayOutput = ray(directionX, directionY, coords[0]+Math.cos(directionX*degToRad)*0.01, coords[1]+Math.sin(directionX*degToRad)*0.01, coords[2]+Math.sin(directionY*degToRad)*0.01);
-          distance += rayOutput[0]+2;
+          let rayOutput = ray(directionX, directionY, coords[0]+Math.cos(directionX)*0.01, coords[1]+Math.sin(directionX)*0.01, coords[2]+Math.sin(directionY)*0.01, true);
+          distance += rayOutput[0]+1;
           let collision = rayOutput[1];
           let color = colors[rayOutput[2]];
           
-          if (distance >= 12) {
+          if (distance >= renderDistance) {
             return [0,0,0]
           } else {
             return color(collision, distance, directionX, directionY)
           }
+        },
+        function(coords, distance) {
+          return [57/(distance+0.5)/colorModifier-10,255/(distance+0.5)/colorModifier-10,20/(distance+0.5)/colorModifier-10]
         }
       ];
 
       function drawRect(startX, startY, endX, endY, r, g, b, a) {
+        //let data = new Array(endX*4);
         for (let x = Math.floor(startX); x < startX+endX && x < width; x++) {
           for (let y = Math.floor(startY); y < startY+endY && y < height; y++) {
             image.data[x*4+y*width*4+0] = Math.max(Math.min(Math.floor(r), 255), 0);
@@ -84,6 +88,15 @@
             image.data[x*4+y*width*4+3] = Math.max(Math.min(Math.floor(a), 255), 0);
           }
         }
+        //for (let x = Math.floor(startX); x < startX+endX && x < width; x++) {
+        //  data[x*4+0] = Math.max(Math.min(Math.floor(r), 255), 0);
+        //  data[x*4+1] = Math.max(Math.min(Math.floor(g), 255), 0);
+        //  data[x*4+2] = Math.max(Math.min(Math.floor(b), 255), 0);
+        //  data[x*4+3] = Math.max(Math.min(Math.floor(a), 255), 0);
+        //}
+        //for (let y = Math.floor(startY); y < startY+endY && y < width; y++) {
+        //  image.data[0,1,2,3] = [0,0,0,255];//.concat(data, image.data.slice(6));
+        //}
       }
 
       function drawPixel(x, y, r, g, b, a) {
@@ -102,7 +115,7 @@
       
       map = [
         [1,1,1,1,1,1,1,1,1,1,1,2,3,1],
-        [1,0,1,1,0,1,0,1,0,0,0,0,0,1],
+        [1,0,1,1,0,1,0,1,0,0,0,0,0,5],
         [1,0,0,1,0,1,0,1,0,0,0,0,0,4],
         [1,1,0,0,0,1,0,1,0,5,0,5,0,4],
         [1,0,0,1,0,1,0,1,0,0,2,3,0,4],
@@ -160,24 +173,28 @@
       
       const distance = (x1, y1, z1, x2, y2, z2) => Math.hypot(x2 - x1, y2 - y1, z2 - z1);
       
-      function ray(directionX, directionY, startX, startY, startZ) {
+      function ray(directionX, directionY, startX, startY, startZ, hitPlayer) {
         let x = startX;
         let y = startY;
         let z = startZ;
         
-        while (distance(startX, startY, startZ, x, y, z) < 12) {
-          let r = 0.25;
-          while (findMapVal(x, y, r) != 0 || z-r < 0 || z+r > 1) {
+        let r = 0.25;
+        while (distance(startX, startY, startZ, x, y, z) < renderDistance) {
+          r = 0.25;
+          while (findMapVal(x, y, r) != 0 || z-r < 0 || z+r > 1 || (hitPlayer && distance(playerX, playerY, playerZ/2, x, y, z/2+0.1) < 0.2+r)) {
             if (r < 0.001) {
+              if (hitPlayer && distance(playerX, playerY, playerZ/2, x, y, z/2+0.1) < 0.2+r) {
+                return [distance(startX, startY, startZ, x, y, z), [x, y, z], 6];
+              }
               return [distance(startX, startY, startZ, x, y, z), [x, y, z], findMapVal(x, y, r)];
             }
             r *= 0.5;
           }
-          x += Math.cos(directionX*degToRad)*r;
-          y += Math.sin(directionX*degToRad)*r;
-          z += Math.sin(directionY*degToRad)*r;
+          x += Math.cos(directionX)*r;
+          y += Math.sin(directionX)*r;
+          z += Math.sin(directionY)*r;
         }
-        return [12, [x, y, z], findMapVal(x, y, r)];
+        return [renderDistance, [x, y, z], findMapVal(x, y, r)];
       }
       
       function render() {
@@ -188,15 +205,17 @@
 
 // Fill with gradient
 //ctx.fillStyle = grd;
-        ctx.fillStyle = "black";
-        ctx.fillRect(0, 0, width, height)
-        let distance = 8;
-        for (let directionX = playerDirectionX-(FOV/2); directionX <= playerDirectionX+(FOV/2); directionX += FOV/resolution) {
-          for (let directionY = playerDirectionY-(FOVY/2); directionY <= playerDirectionY+(FOVY/2); directionY += FOVY/resolution) {
+        let color;
+        let Xmin = playerDirectionX-(FOV/2);
+        let Ymin = playerDirectionY-(FOVY/2);
+        let Xmax = playerDirectionX+(FOV/2);
+        let Ymax = playerDirectionY+(FOVY/2);
+        let Xincrement = FOV/resolution;
+        let Yincrement = FOVY/resolution;
+        for (let directionX = Xmin; directionX <= Xmax; directionX += Xincrement) {
+          for (let directionY = Ymin; directionY <= Ymax; directionY += Yincrement) {
             let rayOutput = ray(directionX, directionY, playerX, playerY, playerZ);
-            distance = rayOutput[0];
-            let collision = rayOutput[1];
-            let color = colors[rayOutput[2]];
+            color = colors[rayOutput[2]](rayOutput[1], rayOutput[0], directionX, directionY);
             //distance = distance*Math.cos((directionX-playerDirectionX)/360*Math.PI*2);
             //if (collision[2] > 0.998 || collision[2] < 0.002) {
             //  ctx.fillStyle = "hsl(0, 100%, " + ((120+((Math.floor(collision[0])+Math.floor(collision[1]))%2*50+1))/(distance+0.6)-10) + "%)";
@@ -205,9 +224,13 @@
             //  ctx.fillStyle = "hsl(180, 100%, " + (120/(distance+0.6)-10) + "%)";
             //  ctx.fillStyle = "rgb(" + (color[0]/(distance+0.5)-10) + ", " + (color[1]/(distance+0.5)-10) + ", " + (color[2]/(distance+0.5)-10) + ")";
             //}
-            color = color(collision, distance, directionX, directionY);
+            
+            //color = color(collision, distance, directionX, directionY);
+            //ctx.fillStyle = "rgb(" + color[0] + ", " + color[1] + ", " + color[2] + ")";
             drawRect((directionX-playerDirectionX)*width/FOV+width/2, -(directionY-playerDirectionY)*width/FOVY+height/2, width/resolution, width/resolution+0.5, color[0], color[1], color[2], 255);
             //drawPixel((directionX-playerDirectionX)*width/FOV+width/2, -(directionY-playerDirectionY)*width/FOVY+height/2, color[0], color[1], color[2], 255);
+            
+            //ctx.fillRect((directionX-playerDirectionX)*width/FOV+width/2, -(directionY-playerDirectionY)*width/FOVY+height/2, width/resolution, width/resolution+0.5);
           }
         }
         ctx.putImageData(image, 0, 0);
@@ -267,49 +290,49 @@
         prevTimeMove = currentTime;
 
         if (pressedKeys["ArrowLeft"]) {
-          playerDirectionX -= 3;
+          playerDirectionX -= 1*dist;
         }
         if (pressedKeys["ArrowRight"]) {
-          playerDirectionX += 3;
+          playerDirectionX += 1*dist;
         }
         if (pressedKeys["ArrowUp"] || pressedKeys["w"]) {
-          playerX += Math.cos(playerDirectionX*degToRad)*dist;
+          playerX += Math.cos(playerDirectionX)*dist;
           while (findMapVal(playerX, playerY, 0.2) != 0) {
-            playerX -= Math.cos(playerDirectionX*degToRad)*0.01;
+            playerX -= Math.cos(playerDirectionX)*0.01;
           }
-          playerY += Math.sin(playerDirectionX*degToRad)*dist;
+          playerY += Math.sin(playerDirectionX)*dist;
           while (findMapVal(playerX, playerY, 0.2) != 0) {
-            playerY -= Math.sin(playerDirectionX*degToRad)*0.01;
+            playerY -= Math.sin(playerDirectionX)*0.01;
           }
         }
         if (pressedKeys["ArrowDown"] || pressedKeys["s"]) {
-          playerX -= Math.cos(playerDirectionX*degToRad)*dist;
+          playerX -= Math.cos(playerDirectionX)*dist;
           while (findMapVal(playerX, playerY, 0.2) != 0) {
-            playerX += Math.cos(playerDirectionX*degToRad)*0.01;
+            playerX += Math.cos(playerDirectionX)*0.01;
           }
-          playerY -= Math.sin(playerDirectionX*degToRad)*dist;
+          playerY -= Math.sin(playerDirectionX)*dist;
           while (findMapVal(playerX, playerY, 0.2) != 0) {
-            playerY += Math.sin(playerDirectionX*degToRad)*0.01;
+            playerY += Math.sin(playerDirectionX)*0.01;
           }
         }
         if (pressedKeys["a"]) {
-          playerX -= Math.cos(playerDirectionX*degToRad+Math.PI/2)*dist;
+          playerX -= Math.cos(playerDirectionX+Math.PI/2)*dist;
           while (findMapVal(playerX, playerY, 0.2) != 0) {
-            playerX += Math.cos(playerDirectionX*degToRad+Math.PI/2)*0.01;
+            playerX += Math.cos(playerDirectionX+Math.PI/2)*0.01;
           }
-          playerY -= Math.sin(playerDirectionX*degToRad+Math.PI/2)*dist;
+          playerY -= Math.sin(playerDirectionX+Math.PI/2)*dist;
           while (findMapVal(playerX, playerY, 0.2) != 0) {
-            playerY += Math.sin(playerDirectionX*degToRad+Math.PI/2)*0.01;
+            playerY += Math.sin(playerDirectionX+Math.PI/2)*0.01;
           }
         }
         if (pressedKeys["d"]) {
-          playerX += Math.cos(playerDirectionX*degToRad+Math.PI/2)*dist;
+          playerX += Math.cos(playerDirectionX+Math.PI/2)*dist;
           while (findMapVal(playerX, playerY, 0.2) != 0) {
-            playerX -= Math.cos(playerDirectionX*degToRad+Math.PI/2)*0.01;
+            playerX -= Math.cos(playerDirectionX+Math.PI/2)*0.01;
           }
-          playerY += Math.sin(playerDirectionX*degToRad+Math.PI/2)*dist;
+          playerY += Math.sin(playerDirectionX+Math.PI/2)*dist;
           while (findMapVal(playerX, playerY, 0.2) != 0) {
-            playerY -= Math.sin(playerDirectionX*degToRad+Math.PI/2)*0.01;
+            playerY -= Math.sin(playerDirectionX+Math.PI/2)*0.01;
           }
         }
       }
@@ -324,12 +347,12 @@
       //const moveInterval = setInterval(move, 10);
       
       document.addEventListener("mousemove", function(e) {
-        playerDirectionX += e.movementX/4;
-        playerDirectionY -= e.movementY/4;
-        if (playerDirectionY > 90) {
-          playerDirectionY = 90;
-        } else if (playerDirectionY < -90) {
-          playerDirectionY = -90;
+        playerDirectionX += e.movementX/200;
+        playerDirectionY -= e.movementY/200;
+        if (playerDirectionY > Math.PI/2) {
+          playerDirectionY = Math.PI/2;
+        } else if (playerDirectionY < -Math.PI/2) {
+          playerDirectionY = -Math.PI/2;
         }
       });
       
